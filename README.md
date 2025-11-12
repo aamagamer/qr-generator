@@ -61,5 +61,3 @@ Para dudas, sugerencias o feedback, puedes contactarme en:
 ¡Gracias por revisar el proyecto! Espero que te sea útil y puedas adaptarlo para tus distintas iniciativas 🙂
 
 ```
-
----
