@@ -49,17 +49,38 @@ export function QRScanner({ eventId }: QRScannerProps) {
         return
       }
 
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment" },
-      })
-
       const video = document.getElementById("qr-video") as HTMLVideoElement
-      if (!video) return
+      if (!video) {
+        toast.error("No se encontró el elemento de video.")
+        return
+      }
+
+      // Solicita la cámara trasera (preferida)
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: "environment" } },
+        audio: false,
+      })
 
       video.srcObject = stream
       video.muted = true
+      video.autoplay = true
       video.setAttribute("playsinline", "true")
-      await video.play()
+      video.setAttribute("autoplay", "")
+      video.setAttribute("muted", "")
+
+      // Esperar a que el video esté listo antes de reproducir
+      await new Promise<void>((resolve, reject) => {
+        video.onloadedmetadata = async () => {
+          try {
+            await video.play()
+            resolve()
+          } catch (err) {
+            console.error("Error reproduciendo video:", err)
+            toast.error("No se pudo iniciar el video. Toca para permitir la reproducción.")
+            reject(err)
+          }
+        }
+      })
 
       setIsScanning(true)
       setHasPermission(true)
@@ -162,8 +183,8 @@ export function QRScanner({ eventId }: QRScannerProps) {
                   id="qr-video"
                   className="absolute inset-0 w-full h-full object-cover"
                   playsInline
-                  muted
                   autoPlay
+                  muted
                 />
                 <div className="absolute inset-0 border-4 border-white/20 rounded-lg">
                   <div className="absolute inset-8 border-2 border-white rounded-lg shadow-lg shadow-white/50" />
