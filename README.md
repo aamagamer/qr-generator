@@ -54,7 +54,7 @@ Si quieres colaborar:
 ## 📞 Contacto
 
 Para dudas, sugerencias o feedback, puedes contactarme en:
-**Ángel Alejandro Morales Aguilar** aama0108003@gmail.com
+**Angel Alejandro Morales Aguilar** aama0108003@gmail.com
 
 ---
 
