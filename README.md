@@ -1,30 +1,65 @@
-# QR generator and scanner
+````markdown
+# QR-Generator
 
-*Automatically synced with your [v0.app](https://v0.app) deployments*
+Generador sencillo de códigos QR, ideal para gestionar eventos.  
+Este repositorio contiene la herramienta “QR-Generator” para generar códigos QR mediante línea de comandos (o interfaz, según sea tu implementación).
 
-[![Deployed on Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-black?style=for-the-badge&logo=vercel)](https://vercel.com/aamagods-projects/v0-qr-generator-and-scanner)
-[![Built with v0](https://img.shields.io/badge/Built%20with-v0.app-black?style=for-the-badge)](https://v0.app/chat/s84U1TqnLbA)
+## 🧾 Descripción
 
-## Overview
+Con esta herramienta puedes transformar un texto, URL o dato en un código QR que se puede guardar como imagen o mostrar en terminal/web. Fácil de usar, ligera, ideal para integrarse en sistemas como el que estás desarrollando para riego de árboles, transporte o bases de datos.
 
-This repository will stay in sync with your deployed chats on [v0.app](https://v0.app).
-Any changes you make to your deployed app will be automatically pushed to this repository from [v0.app](https://v0.app).
+## ⚙️ Funcionalidades
 
-## Deployment
+- Generar código QR a partir de una cadena (texto, URL, etc.).   
+- Guardar la imagen resultante (por ejemplo PNG, JPG)
 
-Your project is live at:
 
-**[https://vercel.com/aamagods-projects/v0-qr-generator-and-scanner](https://vercel.com/aamagods-projects/v0-qr-generator-and-scanner)**
+## 🚀 Instalación
 
-## Build your app
+1. Clona el repositorio:
+   ```bash
+   git clone https://github.com/aamagamer/qr-generator.git
+   cd qr-generator
+````
 
-Continue building your app on:
+2. Instala las dependencias:
 
-**[https://v0.app/chat/s84U1TqnLbA](https://v0.app/chat/s84U1TqnLbA)**
+   ```bash
+   npm install  
+   ```
 
-## How It Works
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-1. Create and modify your project using [v0.app](https://v0.app)
-2. Deploy your chats from the v0 interface
-3. Changes are automatically pushed to this repository
-4. Vercel deploys the latest version from this repository
+   ```bash
+   npm run build  
+   ```
+
+## 📜 Licencia
+
+Este proyecto fue elaborado por
+Angel Alejandro Morales Aguilar. AAMAGOD
+
+## 🤝 Contribuciones
+
+¡Las contribuciones son bienvenidas!
+Si quieres colaborar:
+
+1. Haz un fork del repositorio.
+2. Crea una rama con tu feature/fix: `git checkout -b feature-xyz`.
+3. Realiza tus cambios y commitea: `git commit -m "Añade nueva funcionalidad xyz"`.
+4. Envía un Pull Request.
+
+## 📞 Contacto
+
+Para dudas, sugerencias o feedback, puedes contactarme en:
+**Ángel Alejandro Morales Aguilar** aama0108003@gmail.com
+
+---
+
+¡Gracias por revisar el proyecto! Espero que te sea útil y puedas adaptarlo para tus distintas iniciativas 🙂
+
+```
+
+---
