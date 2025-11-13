@@ -27,67 +27,86 @@ export function QRScanner({ eventId }: QRScannerProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const detectionLoopRef = useRef<number | null>(null)
+  const isDetectingRef = useRef(false)
 
   useEffect(() => {
-    checkCameraPermission()
-
     return () => {
       stopScanning()
     }
   }, [])
 
-  const checkCameraPermission = async () => {
-    try {
-      const result = await navigator.permissions.query({ name: "camera" as PermissionName })
-      setHasPermission(result.state === "granted")
-
-      result.addEventListener("change", () => {
-        setHasPermission(result.state === "granted")
-      })
-    } catch (error) {
-      setHasPermission(null)
-    }
-  }
-
   const startScanning = async () => {
     try {
+      console.log("[v0] Requesting camera access...")
+
+      // Request camera with mobile-optimized settings
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
-          facingMode: "environment",
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
+          facingMode: { ideal: "environment" },
+          width: { ideal: 1920, max: 1920 },
+          height: { ideal: 1080, max: 1080 },
         },
+        audio: false,
       })
 
+      console.log("[v0] Camera stream obtained:", stream.active)
       streamRef.current = stream
-      const video = document.getElementById("qr-video") as HTMLVideoElement
-      videoRef.current = video
 
-      if (video) {
-        video.srcObject = stream
-        await video.play()
-        setIsScanning(true)
-        setHasPermission(true)
-
-        video.onloadedmetadata = () => {
-          startQRDetection(video)
-        }
+      // Get video element and attach stream
+      const video = videoRef.current
+      if (!video) {
+        console.error("[v0] Video element not found")
+        return
       }
+
+      video.srcObject = stream
+      video.setAttribute("playsinline", "true")
+      video.setAttribute("autoplay", "true")
+      video.setAttribute("muted", "true")
+
+      // Wait for video to be ready
+      await new Promise((resolve, reject) => {
+        video.onloadedmetadata = () => {
+          console.log("[v0] Video metadata loaded")
+          resolve(true)
+        }
+        video.onerror = (e) => {
+          console.error("[v0] Video error:", e)
+          reject(e)
+        }
+        setTimeout(() => reject(new Error("Video loading timeout")), 5000)
+      })
+
+      await video.play()
+      console.log("[v0] Video playing")
+
+      setIsScanning(true)
+      setHasPermission(true)
+
+      // Start QR detection after video is playing
+      setTimeout(() => startQRDetection(), 500)
     } catch (error) {
-      console.error("Error accessing camera:", error)
+      console.error("[v0] Error accessing camera:", error)
       toast.error("No se pudo acceder a la cámara. Verifica los permisos.")
       setHasPermission(false)
+      setIsScanning(false)
     }
   }
 
   const stopScanning = () => {
+    console.log("[v0] Stopping scanner...")
+    isDetectingRef.current = false
+
     if (detectionLoopRef.current) {
       cancelAnimationFrame(detectionLoopRef.current)
       detectionLoopRef.current = null
     }
 
     if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop())
+      streamRef.current.getTracks().forEach((track) => {
+        track.stop()
+        console.log("[v0] Track stopped:", track.kind)
+      })
       streamRef.current = null
     }
 
@@ -98,30 +117,42 @@ export function QRScanner({ eventId }: QRScannerProps) {
     setIsScanning(false)
   }
 
-  const startQRDetection = async (video: HTMLVideoElement) => {
+  const startQRDetection = async () => {
+    const video = videoRef.current
+    if (!video) {
+      console.error("[v0] No video element for detection")
+      return
+    }
+
     if ("BarcodeDetector" in window) {
+      console.log("[v0] Starting BarcodeDetector...")
       const barcodeDetector = new (window as any).BarcodeDetector({ formats: ["qr_code"] })
+      isDetectingRef.current = true
 
       const detect = async () => {
-        if (isScanning && video.readyState === video.HAVE_ENOUGH_DATA && !isProcessing) {
-          try {
+        if (!isDetectingRef.current || !videoRef.current) return
+
+        try {
+          if (video.readyState === video.HAVE_ENOUGH_DATA && !isProcessing) {
             const barcodes = await barcodeDetector.detect(video)
-            if (barcodes.length > 0) {
+            if (barcodes.length > 0 && !isProcessing) {
+              console.log("[v0] QR code detected:", barcodes[0].rawValue)
               await handleScan(barcodes[0].rawValue)
             }
-          } catch (error) {
-            console.error("Detection error:", error)
           }
+        } catch (error) {
+          console.error("[v0] Detection error:", error)
         }
 
-        if (isScanning) {
+        if (isDetectingRef.current) {
           detectionLoopRef.current = requestAnimationFrame(detect)
         }
       }
 
       detect()
     } else {
-      toast.error("La detección automática no está disponible. Usa entrada manual.")
+      console.log("[v0] BarcodeDetector not available")
+      toast.error("La detección automática no está disponible en este navegador. Usa entrada manual.")
     }
   }
 
@@ -129,6 +160,7 @@ export function QRScanner({ eventId }: QRScannerProps) {
     if (isProcessing || !code) return
 
     setIsProcessing(true)
+    console.log("[v0] Processing scan:", code)
 
     try {
       const response = await fetch("/api/validate-ticket", {
@@ -149,6 +181,7 @@ export function QRScanner({ eventId }: QRScannerProps) {
         }
         toast.success("Boleto válido", {
           description: "Entrada registrada correctamente",
+          duration: 2000,
         })
       } else if (data.alreadyScanned) {
         result = {
@@ -159,6 +192,7 @@ export function QRScanner({ eventId }: QRScannerProps) {
         }
         toast.error("Boleto duplicado", {
           description: "Este boleto ya fue utilizado",
+          duration: 2000,
         })
       } else {
         result = {
@@ -169,15 +203,16 @@ export function QRScanner({ eventId }: QRScannerProps) {
         }
         toast.error("Boleto inválido", {
           description: "El código no corresponde a este evento",
+          duration: 2000,
         })
       }
 
       setLastResult(result)
       setScanHistory((prev) => [result, ...prev].slice(0, 20))
 
-      await new Promise((resolve) => setTimeout(resolve, 800))
+      await new Promise((resolve) => setTimeout(resolve, 1200))
     } catch (error) {
-      console.error("Scan error:", error)
+      console.error("[v0] Scan error:", error)
       toast.error("Error al validar el boleto")
     } finally {
       setIsProcessing(false)
@@ -196,25 +231,28 @@ export function QRScanner({ eventId }: QRScannerProps) {
       <Card className="bg-slate-900/50 border-slate-700">
         <CardContent className="p-6">
           <div className="relative aspect-square w-full bg-slate-950 rounded-lg overflow-hidden">
-            {isScanning ? (
+            <video
+              ref={videoRef}
+              className={`absolute inset-0 w-full h-full object-cover ${isScanning ? "block" : "hidden"}`}
+              playsInline
+              autoPlay
+              muted
+            />
+
+            {isScanning && (
               <>
-                <video
-                  id="qr-video"
-                  className="absolute inset-0 w-full h-full object-cover"
-                  playsInline
-                  autoPlay
-                  muted
-                />
-                <div className="absolute inset-0 border-4 border-white/20 rounded-lg">
+                <div className="absolute inset-0 border-4 border-white/20 rounded-lg pointer-events-none">
                   <div className="absolute inset-8 border-2 border-white rounded-lg shadow-lg shadow-white/50" />
                 </div>
                 {isProcessing && (
-                  <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                  <div className="absolute inset-0 bg-black/50 flex items-center justify-center pointer-events-none">
                     <Loader2 className="h-12 w-12 text-white animate-spin" />
                   </div>
                 )}
               </>
-            ) : (
+            )}
+
+            {!isScanning && (
               <div className="absolute inset-0 flex items-center justify-center">
                 <div className="text-center">
                   <CameraOff className="h-16 w-16 text-slate-600 mx-auto mb-4" />

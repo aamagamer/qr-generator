@@ -2,7 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Download, Loader2 } from "lucide-react"
+import { Download, Loader2, Eye, EyeOff } from "lucide-react"
 import { TicketCard } from "./ticket-card"
 import { useState } from "react"
 import { toast } from "sonner"
@@ -24,6 +24,7 @@ interface TicketsGridProps {
 
 export function TicketsGrid({ tickets, eventName }: TicketsGridProps) {
   const [isDownloading, setIsDownloading] = useState(false)
+  const [showTickets, setShowTickets] = useState(false)
 
   const handleDownloadAll = async () => {
     setIsDownloading(true)
@@ -85,28 +86,45 @@ export function TicketsGrid({ tickets, eventName }: TicketsGridProps) {
             <CardTitle>Boletos Generados</CardTitle>
             <p className="text-sm text-muted-foreground mt-1">Total: {tickets.length} boletos</p>
           </div>
-          <Button variant="outline" onClick={handleDownloadAll} disabled={isDownloading}>
-            {isDownloading ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Generando ZIP...
-              </>
-            ) : (
-              <>
-                <Download className="h-4 w-4 mr-2" />
-                Descargar Todos (ZIP)
-              </>
-            )}
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setShowTickets(!showTickets)}>
+              {showTickets ? (
+                <>
+                  <EyeOff className="h-4 w-4 mr-2" />
+                  Ocultar Boletos
+                </>
+              ) : (
+                <>
+                  <Eye className="h-4 w-4 mr-2" />
+                  Ver Boletos
+                </>
+              )}
+            </Button>
+            <Button variant="outline" onClick={handleDownloadAll} disabled={isDownloading}>
+              {isDownloading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Generando...
+                </>
+              ) : (
+                <>
+                  <Download className="h-4 w-4 mr-2" />
+                  Descargar Todos
+                </>
+              )}
+            </Button>
+          </div>
         </div>
       </CardHeader>
-      <CardContent>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {tickets.map((ticket) => (
-            <TicketCard key={ticket.id} ticket={ticket} eventName={eventName} />
-          ))}
-        </div>
-      </CardContent>
+      {showTickets && (
+        <CardContent>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {tickets.map((ticket) => (
+              <TicketCard key={ticket.id} ticket={ticket} eventName={eventName} />
+            ))}
+          </div>
+        </CardContent>
+      )}
     </Card>
   )
 }
