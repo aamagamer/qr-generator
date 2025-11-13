@@ -66,16 +66,24 @@ export function GenerateTicketsDialog({
     try {
       const supabase = createClient()
 
-      // Generate tickets
-      const ticketsToInsert = Array.from({ length: quantity }, (_, index) => ({
-        event_id: eventId,
-        code: generateTicketCode(eventName, generatedTickets + index),
-        scanned: false,
-      }))
+      // Generate tickets in batches of 500 for better performance
+      const batchSize = 500
+      const batches = Math.ceil(quantity / batchSize)
 
-      const { error } = await supabase.from("tickets").insert(ticketsToInsert)
+      for (let i = 0; i < batches; i++) {
+        const start = i * batchSize
+        const end = Math.min(start + batchSize, quantity)
+        const batchQuantity = end - start
 
-      if (error) throw error
+        const ticketsToInsert = Array.from({ length: batchQuantity }, (_, index) => ({
+          event_id: eventId,
+          code: generateTicketCode(eventName, generatedTickets + start + index),
+          scanned: false,
+        }))
+
+        const { error } = await supabase.from("tickets").insert(ticketsToInsert)
+        if (error) throw error
+      }
 
       toast.success(`${quantity} boleto${quantity > 1 ? "s" : ""} generado${quantity > 1 ? "s" : ""} exitosamente`)
       setOpen(false)

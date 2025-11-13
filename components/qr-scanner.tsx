@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -15,6 +15,7 @@ type ScanResult = {
   type: "valid" | "already-scanned" | "invalid"
   code: string
   message: string
+  timestamp: number
 }
 
 export function QRScanner({ eventId }: QRScannerProps) {
@@ -23,9 +24,11 @@ export function QRScanner({ eventId }: QRScannerProps) {
   const [isProcessing, setIsProcessing] = useState(false)
   const [scanHistory, setScanHistory] = useState<ScanResult[]>([])
   const [hasPermission, setHasPermission] = useState<boolean | null>(null)
+  const videoRef = useRef<HTMLVideoElement | null>(null)
+  const streamRef = useRef<MediaStream | null>(null)
+  const detectionLoopRef = useRef<number | null>(null)
 
   useEffect(() => {
-    // Check camera permission on mount
     checkCameraPermission()
 
     return () => {
@@ -42,7 +45,6 @@ export function QRScanner({ eventId }: QRScannerProps) {
         setHasPermission(result.state === "granted")
       })
     } catch (error) {
-      // Permission API not supported, will request on startScanning
       setHasPermission(null)
     }
   }
@@ -50,16 +52,26 @@ export function QRScanner({ eventId }: QRScannerProps) {
   const startScanning = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment" },
+        video: {
+          facingMode: "environment",
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
       })
 
+      streamRef.current = stream
       const video = document.getElementById("qr-video") as HTMLVideoElement
+      videoRef.current = video
+
       if (video) {
         video.srcObject = stream
-        video.play()
+        await video.play()
         setIsScanning(true)
         setHasPermission(true)
-        startQRDetection(video)
+
+        video.onloadedmetadata = () => {
+          startQRDetection(video)
+        }
       }
     } catch (error) {
       console.error("Error accessing camera:", error)
@@ -69,39 +81,46 @@ export function QRScanner({ eventId }: QRScannerProps) {
   }
 
   const stopScanning = () => {
-    const video = document.getElementById("qr-video") as HTMLVideoElement
-    if (video && video.srcObject) {
-      const stream = video.srcObject as MediaStream
-      stream.getTracks().forEach((track) => track.stop())
-      video.srcObject = null
+    if (detectionLoopRef.current) {
+      cancelAnimationFrame(detectionLoopRef.current)
+      detectionLoopRef.current = null
     }
+
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop())
+      streamRef.current = null
+    }
+
+    if (videoRef.current) {
+      videoRef.current.srcObject = null
+    }
+
     setIsScanning(false)
   }
 
   const startQRDetection = async (video: HTMLVideoElement) => {
-    // Use BarcodeDetector API if available
     if ("BarcodeDetector" in window) {
       const barcodeDetector = new (window as any).BarcodeDetector({ formats: ["qr_code"] })
 
       const detect = async () => {
-        if (!isScanning && video.readyState === video.HAVE_ENOUGH_DATA) {
+        if (isScanning && video.readyState === video.HAVE_ENOUGH_DATA && !isProcessing) {
           try {
             const barcodes = await barcodeDetector.detect(video)
-            if (barcodes.length > 0 && !isProcessing) {
+            if (barcodes.length > 0) {
               await handleScan(barcodes[0].rawValue)
             }
           } catch (error) {
             console.error("Detection error:", error)
           }
         }
+
         if (isScanning) {
-          requestAnimationFrame(detect)
+          detectionLoopRef.current = requestAnimationFrame(detect)
         }
       }
 
       detect()
     } else {
-      // Fallback: Manual input
       toast.error("La detección automática no está disponible. Usa entrada manual.")
     }
   }
@@ -125,7 +144,8 @@ export function QRScanner({ eventId }: QRScannerProps) {
         result = {
           type: "valid",
           code,
-          message: "Boleto válido y registrado",
+          message: "✓ Boleto válido y registrado",
+          timestamp: Date.now(),
         }
         toast.success("Boleto válido", {
           description: "Entrada registrada correctamente",
@@ -134,7 +154,8 @@ export function QRScanner({ eventId }: QRScannerProps) {
         result = {
           type: "already-scanned",
           code,
-          message: "Este boleto ya fue escaneado",
+          message: "⚠ Este boleto ya fue escaneado",
+          timestamp: Date.now(),
         }
         toast.error("Boleto duplicado", {
           description: "Este boleto ya fue utilizado",
@@ -143,7 +164,8 @@ export function QRScanner({ eventId }: QRScannerProps) {
         result = {
           type: "invalid",
           code,
-          message: "Boleto no válido para este evento",
+          message: "✗ Boleto no válido",
+          timestamp: Date.now(),
         }
         toast.error("Boleto inválido", {
           description: "El código no corresponde a este evento",
@@ -151,10 +173,9 @@ export function QRScanner({ eventId }: QRScannerProps) {
       }
 
       setLastResult(result)
-      setScanHistory((prev) => [result, ...prev].slice(0, 10))
+      setScanHistory((prev) => [result, ...prev].slice(0, 20))
 
-      // Wait before allowing next scan
-      await new Promise((resolve) => setTimeout(resolve, 2000))
+      await new Promise((resolve) => setTimeout(resolve, 800))
     } catch (error) {
       console.error("Scan error:", error)
       toast.error("Error al validar el boleto")
@@ -166,7 +187,7 @@ export function QRScanner({ eventId }: QRScannerProps) {
   const handleManualInput = async () => {
     const code = prompt("Ingresa el código del boleto:")
     if (code) {
-      await handleScan(code)
+      await handleScan(code.trim())
     }
   }
 
@@ -177,7 +198,13 @@ export function QRScanner({ eventId }: QRScannerProps) {
           <div className="relative aspect-square w-full bg-slate-950 rounded-lg overflow-hidden">
             {isScanning ? (
               <>
-                <video id="qr-video" className="absolute inset-0 w-full h-full object-cover" playsInline />
+                <video
+                  id="qr-video"
+                  className="absolute inset-0 w-full h-full object-cover"
+                  playsInline
+                  autoPlay
+                  muted
+                />
                 <div className="absolute inset-0 border-4 border-white/20 rounded-lg">
                   <div className="absolute inset-8 border-2 border-white rounded-lg shadow-lg shadow-white/50" />
                 </div>
@@ -192,6 +219,7 @@ export function QRScanner({ eventId }: QRScannerProps) {
                 <div className="text-center">
                   <CameraOff className="h-16 w-16 text-slate-600 mx-auto mb-4" />
                   <p className="text-slate-400">Cámara desactivada</p>
+                  {hasPermission === false && <p className="text-xs text-red-400 mt-2">Permiso de cámara denegado</p>}
                 </div>
               </div>
             )}
@@ -214,6 +242,7 @@ export function QRScanner({ eventId }: QRScannerProps) {
               variant="outline"
               size="lg"
               className="border-slate-600 text-white hover:bg-slate-800 bg-transparent"
+              disabled={isProcessing}
             >
               Entrada Manual
             </Button>
@@ -221,31 +250,33 @@ export function QRScanner({ eventId }: QRScannerProps) {
 
           {lastResult && (
             <div
-              className={`mt-6 p-4 rounded-lg border-2 ${
+              className={`mt-6 p-6 rounded-lg border-2 ${
                 lastResult.type === "valid"
-                  ? "bg-green-500/10 border-green-500"
+                  ? "bg-green-500/20 border-green-500"
                   : lastResult.type === "already-scanned"
-                    ? "bg-yellow-500/10 border-yellow-500"
-                    : "bg-red-500/10 border-red-500"
+                    ? "bg-yellow-500/20 border-yellow-500"
+                    : "bg-red-500/20 border-red-500"
               }`}
             >
-              <div className="flex items-center gap-3">
-                {lastResult.type === "valid" && <CheckCircle className="h-8 w-8 text-green-500" />}
-                {lastResult.type === "already-scanned" && <AlertTriangle className="h-8 w-8 text-yellow-500" />}
-                {lastResult.type === "invalid" && <XCircle className="h-8 w-8 text-red-500" />}
+              <div className="flex items-center gap-4">
+                {lastResult.type === "valid" && <CheckCircle className="h-12 w-12 text-green-500 flex-shrink-0" />}
+                {lastResult.type === "already-scanned" && (
+                  <AlertTriangle className="h-12 w-12 text-yellow-500 flex-shrink-0" />
+                )}
+                {lastResult.type === "invalid" && <XCircle className="h-12 w-12 text-red-500 flex-shrink-0" />}
                 <div className="flex-1">
                   <p
-                    className={`font-bold ${
+                    className={`font-bold text-xl ${
                       lastResult.type === "valid"
-                        ? "text-green-400"
+                        ? "text-green-300"
                         : lastResult.type === "already-scanned"
-                          ? "text-yellow-400"
-                          : "text-red-400"
+                          ? "text-yellow-300"
+                          : "text-red-300"
                     }`}
                   >
                     {lastResult.message}
                   </p>
-                  <p className="text-xs text-slate-400 font-mono mt-1">{lastResult.code}</p>
+                  <p className="text-sm text-slate-300 font-mono mt-2">{lastResult.code}</p>
                 </div>
               </div>
             </div>
@@ -260,11 +291,12 @@ export function QRScanner({ eventId }: QRScannerProps) {
             <div className="space-y-2">
               {scanHistory.map((result, index) => (
                 <div
-                  key={`${result.code}-${index}`}
+                  key={`${result.code}-${result.timestamp}`}
                   className="flex items-center justify-between p-3 rounded-lg bg-slate-950/50 border border-slate-800"
                 >
                   <div className="flex-1">
                     <p className="text-xs font-mono text-slate-400">{result.code}</p>
+                    <p className="text-xs text-slate-500 mt-1">{new Date(result.timestamp).toLocaleTimeString()}</p>
                   </div>
                   <Badge
                     variant={result.type === "valid" ? "default" : "secondary"}
