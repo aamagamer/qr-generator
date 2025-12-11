@@ -49,7 +49,7 @@
     "input-otp": "1.4.1",
     "jszip": "latest",
     "lucide-react": "^0.454.0",
-    "next": "16.0.0",
+    "next": "16.0.7",
     "next-themes": "latest",
     "qrcode": "latest",
     "react": "19.2.0",
